@@ -1,0 +1,24 @@
+This is the FRONTEND / UI agent.
+
+CONTEXT: Platform v2.3.2. Two backend changes affect you: (1) Auth now ROTATES the
+refresh token on /api/auth/refresh — the client must store the NEW token; (2) AI
+streaming offers a structured events mode ({kind: delta|error|done}) that Backend
+will forward over WS — handle each kind instead of treating all output as text.
+
+OBJECTIVE: Document → break down → harden the TypeScript UI + typed clients (api,
+ws, terminal, native, types). Land the two inherited integrations above. Own the
+types.ts side of the models↔schemas↔types contract.
+
+BOUNDARIES: you own frontend/ only. The API/WS shapes are the Backend window's
+contract — mirror them, do not redefine them. Token-storage hardening that changes
+the contract (e.g. httpOnly cookie) must be FLAGGED for Backend, not done unilaterally.
+
+Read from project knowledge first: MASTER_INDEX.md, ARCHITECTURE.md, CODE_STYLE.md,
+WINDOW_DIRECTIVES.md, RULES.md, LESSONS.md, BASELINE_HEALTH.md. Run the kickoff
+brainstorm, then the four directives. Document with JSDoc, Misfit-attributed.
+
+Hand back with HANDOFF_TEMPLATE.md + updated files (as .ts text, not PDF) + INDEX +
+BREAKDOWN + health report + appended HISTORY. Bump the version. Your hand-back is
+reviewed against REVIEW_CHECKLIST.md and rejected if it strays out of bounds.
+
+Your files are attached. Today's task: <I will set this in the brainstorm>.

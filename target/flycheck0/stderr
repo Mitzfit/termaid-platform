@@ -1,0 +1,230 @@
+   0.574182700s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="termaid_scan"}: cargo::core::compiler::fingerprint: fingerprint error for termaid-scan v0.1.0 (C:\Termaid)/Check { test: false }/TargetInner { ..: lib_target("termaid_scan", ["lib"], "C:\\Termaid\\src\\lib.rs", Edition2021) }
+   0.575553600s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="termaid_scan"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Termaid\target\debug\.fingerprint\termaid-scan-59652f554bbbb303\lib-termaid_scan`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.592114500s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint error for termaid-scan v0.1.0 (C:\Termaid)/RunCustomBuild/TargetInner { ..: custom_build_target("build-script-build", "C:\\Termaid\\build.rs", Edition2021) }
+   0.592144400s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="build-script-build"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Termaid\target\debug\.fingerprint\termaid-scan-e6b583144cd42c92\run-build-script-build-script-build`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_libgit2_prerelease
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: git_midx_writer_dump
+  19: git_filter_source_repo
+  20: git_midx_writer_dump
+  21: BaseThreadInitThunk
+  22: RtlUserThreadStart
+   0.592320100s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="build-script-build"}: cargo::core::compiler::fingerprint: fingerprint error for termaid-scan v0.1.0 (C:\Termaid)/Build/TargetInner { ..: custom_build_target("build-script-build", "C:\\Termaid\\build.rs", Edition2021) }
+   0.592338200s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="build-script-build"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Termaid\target\debug\.fingerprint\termaid-scan-48149f84cc11e3d9\build-script-build-script-build`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_libgit2_prerelease
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: git_midx_writer_dump
+  19: git_filter_source_repo
+  20: git_midx_writer_dump
+  21: BaseThreadInitThunk
+  22: RtlUserThreadStart
+   0.592883500s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="termaid_scan"}: cargo::core::compiler::fingerprint: fingerprint error for termaid-scan v0.1.0 (C:\Termaid)/Check { test: true }/TargetInner { ..: lib_target("termaid_scan", ["lib"], "C:\\Termaid\\src\\lib.rs", Edition2021) }
+   0.592904000s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="termaid_scan"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Termaid\target\debug\.fingerprint\termaid-scan-777a920279933fc0\test-lib-termaid_scan`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.593225000s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="termaid-scan"}: cargo::core::compiler::fingerprint: fingerprint error for termaid-scan v0.1.0 (C:\Termaid)/Check { test: false }/TargetInner { name: "termaid-scan", doc: true, ..: with_path("C:\\Termaid\\src\\main.rs", Edition2021) }
+   0.593444900s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="termaid-scan"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Termaid\target\debug\.fingerprint\termaid-scan-a0a8fd6f0501c069\bin-termaid-scan`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.593771000s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="termaid-scan"}: cargo::core::compiler::fingerprint: fingerprint error for termaid-scan v0.1.0 (C:\Termaid)/Check { test: true }/TargetInner { name: "termaid-scan", doc: true, ..: with_path("C:\\Termaid\\src\\main.rs", Edition2021) }
+   0.593786500s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="termaid-scan"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Termaid\target\debug\.fingerprint\termaid-scan-891ad15d601e3252\test-bin-termaid-scan`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.594048500s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="termaid-walk"}: cargo::core::compiler::fingerprint: fingerprint error for termaid-scan v0.1.0 (C:\Termaid)/Check { test: false }/TargetInner { name: "termaid-walk", doc: true, ..: with_path("C:\\Termaid\\src\\bin\\termaid-walk.rs", Edition2021) }
+   0.594061300s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="termaid-walk"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Termaid\target\debug\.fingerprint\termaid-scan-27ca02c1f3545615\bin-termaid-walk`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.594316300s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="termaid-walk"}: cargo::core::compiler::fingerprint: fingerprint error for termaid-scan v0.1.0 (C:\Termaid)/Check { test: true }/TargetInner { name: "termaid-walk", doc: true, ..: with_path("C:\\Termaid\\src\\bin\\termaid-walk.rs", Edition2021) }
+   0.594330900s  INFO prepare_target{force=false package_id=termaid-scan v0.1.0 (C:\Termaid) target="termaid-walk"}: cargo::core::compiler::fingerprint:     err: failed to read `C:\Termaid\target\debug\.fingerprint\termaid-scan-e7da8bc67dc90b99\test-bin-termaid-walk`
+
+Caused by:
+    The system cannot find the file specified. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   Compiling termaid-scan v0.1.0 (C:\Termaid)
+error: could not compile `termaid-scan` (build script) due to 1 previous error

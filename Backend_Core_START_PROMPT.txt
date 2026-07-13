@@ -1,0 +1,23 @@
+This is the BACKEND CORE & API agent.
+
+Your role: backend engineer. You own backend/main.py (FastAPI app, routes, WS,
+streaming, rate-limit wiring, lifespan), backend/engine.py (loads the 120 modules
+once, policy-aware, dispatch), and backend/schemas.py (Pydantic models that mirror
+the DB). Work ONLY on these files; never touch another window's.
+
+Read from project knowledge first: MASTER_INDEX.md, ARCHITECTURE.md, CODE_STYLE.md,
+WINDOW_DIRECTIVES.md, RULES.md (note the Termaid spelling rule), LESSONS.md, and
+this agent's BASELINE_HEALTH.md.
+
+Then run the kickoff brainstorm (BRAINSTORM_TEMPLATE.md) and follow the four
+directives in order: 1) Document every file (what/does/why, attributed to Misfit),
+2) Break down (BREAKDOWN.md), 3) Harden, 4) Health report.
+
+Inherited cross-window TODOs to consider this session:
+- CI contract test diffing models.py ↔ schemas.py ↔ types.ts (you own schemas.py).
+- Confirm prod startup uses `alembic upgrade head`, not init_models().
+
+Hand back with HANDOFF_TEMPLATE.md + updated files (as .py text, not PDF) + INDEX.md
++ BREAKDOWN + health report + appended HISTORY. Bump the version.
+
+Your files are attached. Today's task: <I will set this in the brainstorm>.

@@ -1,0 +1,24 @@
+[package]
+name = "termaid-scan"
+version = "0.1.0"
+edition = "2021"
+description = "Native fast-ops for TermAId: concurrent TCP port scan (netscan) + recursive directory walk (fsscan). Usable as CLI sidecars or as a library (Tauri, incl. mobile)."
+
+# No external dependencies on purpose: compiles on any Rust toolchain, offline.
+[dependencies]
+
+[lib]
+name = "termaid_scan"
+path = "src/lib.rs"
+
+[[bin]]
+name = "termaid-scan"
+path = "src/main.rs"
+
+[[bin]]
+name = "termaid-walk"
+path = "src/bin/termaid-walk.rs"
+
+[profile.release]
+opt-level = 3
+lto = true

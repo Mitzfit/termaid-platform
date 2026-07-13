@@ -1,0 +1,26 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DEPLOYMENT_MODE: server
+      DATABASE_URL: postgresql+asyncpg://termaid:termaid@db:5432/termaid
+      TERMAID_ROOT: /termaid-cli
+      JWT_SECRET: ${JWT_SECRET:-change_me_in_prod}
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    volumes:
+      - ../termaid-complete-windows:/termaid-cli:ro
+    depends_on:
+      - db
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: termaid
+      POSTGRES_PASSWORD: termaid
+      POSTGRES_DB: termaid
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:

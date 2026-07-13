@@ -1,0 +1,26 @@
+[package]
+name = "termaid"
+version = "2.0.0"
+description = "TermAId — cross-platform AI terminal"
+edition = "2021"
+rust-version = "1.77.2"
+
+# Tauri 2 builds a library that both desktop (main.rs) and mobile entry points use.
+[lib]
+name = "termaid_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"        # spawn the Python backend sidecar (local mode)
+tauri-plugin-http = "2"         # talk to a remote backend (server mode)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"                   # native hashing — the Rust performance path
+termaid-scan = { path = "../../native" }   # in-process port scanner (offline-mobile path)
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

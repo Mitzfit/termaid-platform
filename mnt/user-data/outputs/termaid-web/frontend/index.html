@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TermAId Web</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="login" class="panel">
+    <h1>Term<span class="accent">AId</span> <span class="ver">web</span></h1>
+    <p class="sub">cross-platform AI terminal — now in the browser</p>
+    <input id="username" placeholder="username" autocomplete="username" />
+    <input id="password" type="password" placeholder="password" autocomplete="current-password" />
+    <div class="row">
+      <button id="loginBtn">login</button>
+      <button id="registerBtn" class="ghost">register</button>
+    </div>
+    <div id="authMsg" class="msg"></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header>
+      <span class="dot"></span>
+      <span class="title">TermAId</span>
+      <span id="status" class="status">connecting…</span>
+      <button id="logoutBtn" class="ghost small">logout</button>
+    </header>
+    <div id="terminal" class="terminal"></div>
+    <div class="inputline">
+      <span class="prompt">›</span>
+      <input id="cmd" autocomplete="off" spellcheck="false"
+             placeholder="try: calc.hex 255   ·   text.upper hello   ·   help" />
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
