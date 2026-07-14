@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Environment / secrets
+.env
+
+# Runtime data
+termaid_web.db
+*.db
+
+# Node
+node_modules/
+
+# Rust build output
+target/
+
+# Leftover scaffolding from the original build attempt — real system lives in
+# backend/ and termaid-cli/. Not tracked here; see README.md.
+termaid-platform/
+frontend/
+native/
+mobile/
+mnt/
+*.tar.gz
+*.pdf
+
+# OS cruft
+.DS_Store
+Thumbs.db

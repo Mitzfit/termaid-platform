@@ -1,142 +1,89 @@
-# TermAId — Web Edition
+# TermAId
 
-This turns your TermAId terminal assistant into a full-stack web app **without
-rewriting any of your 121 modules**. The web layer drives the exact same engine
-your REPL drives: `ModuleManager` loads the modules, `get_all_commands()` returns
-the `{ "mod.cmd": (module, handler) }` dispatch table, and each `handler(arg)`
-still returns a string. The browser is just a new front door.
-
-Validated against your `termaid-v3.22.0` tree: **1948 commands across 119 modules
-load with zero errors** through the bridge.
+A terminal-native AI assistant, exposed as a web app: a FastAPI backend drives
+a modular command engine (114 modules, 783 commands) over REST + WebSocket,
+with an auth layer, rate limiting, and a four-tier deployment-safety policy
+that gates what's reachable depending on who's running it and where.
 
 ```
-web/
-├── backend/
-│   ├── bridge.py        ← boots TermAId's engine once; the only seam to your code
-│   ├── server.py        ← FastAPI: REST + WebSocket + serves the frontend
-│   ├── db.py            ← web-tier DB (users, sessions, history) — SQLite, Postgres-ready
-│   └── requirements.txt
-├── frontend/
-│   ├── index.html       ← module palette + web terminal
-│   ├── style.css        ← palette derived from your prompt_toolkit theme colors
-│   └── app.js           ← WebSocket terminal, syntax lexer, history, auth (no framework)
-└── README.md
+Termaid/
+├── backend/                ← the actual running service
+│   ├── main.py                FastAPI app: auth, /api/exec, /ws/terminal
+│   ├── engine.py               Loads modules, dispatches "mod.cmd args" → handler(arg)
+│   ├── policy.py                 SAFE / AI / SYSTEM / DANGEROUS module tiers
+│   ├── settings.py                 Env config (.env): mode, AI provider, module overrides
+│   ├── auth.py                       JWT auth (register/login/refresh)
+│   └── database.py                    Users, sessions, command history (SQLite)
+├── termaid-cli/
+│   ├── termaid/extensions/       Module base class + ModuleManager (the loader)
+│   └── modules/                    Every command module lives here, one folder each
+├── run_backend.py           ← entry point: `python run_backend.py`
+└── .env                      Deployment mode + which module tiers are opted in
 ```
+
+Everything else at the repo root (`bridge.py`, `app.js`, `native.py`,
+`termaid-platform/`, the `*_Agent_Kit.md` files, tarballs, PDFs) is leftover
+scaffolding from an earlier, incomplete build attempt and isn't part of the
+running system — the two directories above are what actually executes.
 
 ## Run it
 
 ```bash
-cd web/backend
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python -m venv .venv && .venv\Scripts\activate     # Windows; source .venv/bin/activate elsewhere
 pip install -r requirements.txt
-
-# point the bridge at your TermAId tree (the folder containing termaid/ and modules/)
-export TERMAID_ROOT=/path/to/termaid-complete-windows   # Windows: set TERMAID_ROOT=...
-
-uvicorn server:app --reload --port 8000
+python run_backend.py
 ```
 
-Open http://localhost:8000. Click a command in the left rail or type one in the
-prompt. Slash input (`/text.upper hi`) runs a module; plain text goes to the AI
-provider (set a key like `GEMINI_API_KEY` first, same as the CLI).
+This starts uvicorn on `http://127.0.0.1:8000` with hot reload. Register a
+user, log in (form-encoded, not JSON — see `/api/auth/login`), then either
+hit `POST /api/exec` with `{"command": "calc.calc 2+2"}` or open a WebSocket
+at `/ws/terminal?token=<access_token>` and send `{"type":"exec","payload":"..."}`.
 
-## How the layering works
+## Command model
 
-```
-browser  ──WebSocket /ws──►  server.py  ──►  bridge.Engine.execute(line)
-   ▲                                              │
-   └───────── JSON {output, kind, ok} ◄───────────┘
-                                                  │
-                          your existing ModuleManager + handlers (unchanged)
-```
+Every module is a Python class implementing `on_load()` (registers its
+commands) and one `cmd_<name>(self, arg: str) -> str` method per command.
+`ModuleManager` discovers module folders under `modules/`, imports each as
+`modules.<name>`, instantiates the one `Module` subclass it finds, and
+canonicalizes `instance.name` to the folder name — so a command is always
+addressed as `<folder-name>.<command>`, e.g. `/calc.calc 2+2` or
+`/git.status`. AI-capable modules get `self.ai` / `self.ask_ai(prompt,
+system=)` if an `AI_PROVIDER` is configured; otherwise they degrade to
+"no AI configured" rather than erroring.
 
-`bridge.py` is the whole integration. It adds your project root to `sys.path`,
-constructs `ModuleManager(modules/)`, loads every discovered module, and routes a
-line the same way the REPL's `_handle_command` does — including the
-`/mod sub` → `mod.sub` rewrite. Module exceptions are caught per-request so one
-bad command can never take the server down, and stdout is captured for the
-modules that print instead of returning.
+## The four module tiers (`backend/policy.py`)
 
-## Backend language: Python is the right call
+| Tier | Count | What it means |
+|---|---|---|
+| **SAFE** | 27 | Pure compute or own-data-only (calc, text, password, notes...). Loads everywhere. |
+| **AI** | 12 | Needs an AI provider but is otherwise side-effect-free (brain, cognition, aiconfig...). |
+| **SYSTEM** | 48 | Touches the host — filesystem, network, processes, git/docker (find, netscan, bots, vm, sandbox...). Local mode only. |
+| **DANGEROUS** | 27 | Irreversible or privilege-escalating (syscmd, fastboot, disktool, selfmod, crypto...). Local mode *and* explicit per-module opt-in required. |
 
-Keep the backend in **Python**. Your engine, your modules, and your provider
-clients are all Python; a different backend language would mean either rewriting
-1948 commands or shelling out to Python anyway. **FastAPI** is the pick over
-Flask/Django here because it gives you native **WebSocket** support (essential for
-a streaming terminal feel) and async I/O for the provider calls, with very little
-ceremony.
+Two deployment modes, set via `.env`'s `DEPLOYMENT_MODE`:
 
-## Other languages worth adding (and where)
+- **`local`** (default) — default-allow, except DANGEROUS modules, which need
+  to be named individually in `MODULE_EXTRA_ALLOW` (comma-separated) even
+  here. This machine's `.env` currently opts in all 27 DANGEROUS modules for
+  testing — trim that list down to just what you actually want reachable
+  before leaving it running unattended.
+- **`server`** — default-deny; only SAFE + AI modules load. SYSTEM and
+  DANGEROUS modules are never even imported. Use this if TermAId will be
+  reachable by anyone other than the machine's own operator.
 
-You already have a Rust component (`tools/termaid-splash`), so a polyglot setup
-fits your project. In rough priority for *this* app:
+Every genuinely destructive command (in any tier) additionally requires a
+literal `confirm` argument — or, for a handful of irreversible hardware
+operations (`fastboot flash`, `disktool format`), a longer explicit
+acknowledgement string — checked in the handler itself, on top of the tier
+gating above.
 
-- **TypeScript** — the highest-leverage add. The frontend is plain JS today so it
-  runs offline on Kali with no build step. The moment the UI grows past a few
-  hundred lines (multiple panels, shared state), move `app.js` to TypeScript for
-  type-checked API payloads. Pair with Vite only if/when you want a build step.
-- **SQL** — not optional once there's a real database. You're already writing it
-  in `auth` and `dbkeys`; keep schema/migrations as first-class SQL files rather
-  than hiding them in Python strings.
-- **Rust** — you have it already. Good for any single hot path that's slow in
-  Python (a fast log/packet scanner for `netscan`, hashing, etc.) exposed to the
-  backend via a small subprocess or a PyO3 extension. Don't rewrite modules in it
-  wholesale — reach for it only where a profiler tells you to.
-- **Go** — consider only if you later split a always-on networked piece (a device
-  bridge, a websocket fan-out service) into its own daemon. Its concurrency story
-  and single-binary deploy are nice there. Skip it otherwise; it'd just be a
-  second runtime to babysit.
+## Security notes
 
-Bottom line: **Python backend + TypeScript/JS frontend + SQL**, with Rust kept as
-the surgical-speed tool you already started using.
-
-## Frontend: your HTML/CSS/JS instinct is correct
-
-For a command-driven tool, plain **HTML/CSS/JS is a feature, not a compromise** —
-it loads instantly, has zero supply chain, and runs on a locked-down Kali box with
-no Node toolchain. What I built leans into that:
-
-- A **custom web terminal** instead of a heavy library, so the syntax highlighting
-  mirrors your actual prompt_toolkit lexer (command blue, subcmd cyan, number
-  amber, string green, symbol magenta, flag lavender). The web app reads as the
-  same product as the CLI.
-- A **live command palette** in the left rail, populated from `/api/commands`,
-  filterable, click-to-insert. With 1948 commands, discovery is the real UX
-  problem and this solves it.
-
-When to reach for a framework: if you start building stateful dashboards (the
-`sysmonitor` / `markets` / `netscan` modules would make great live panels), that's
-the point to introduce **React or Svelte** for one section — not the terminal,
-which is better as the lean custom widget it is. Svelte is the lighter choice and
-fits the offline-friendly ethos better.
-
-## Database: SQLite → Postgres
-
-`db.py` ships on **SQLite** on purpose: zero setup, one file, already proven across
-your `auth` and `dbkeys` modules. The schema is written in plain SQL so the upgrade
-to Postgres — worth doing once you have concurrent web users or want server-side
-deploys — is mechanical:
-
-1. `pip install "psycopg[binary]"` (already commented in `requirements.txt`).
-2. In `db.py`, swap the connection helper to psycopg and read a `DATABASE_URL`.
-3. Find-and-replace the two dialect differences, both isolated to `db.py`:
-   - `INTEGER PRIMARY KEY AUTOINCREMENT` → `BIGINT GENERATED ALWAYS AS IDENTITY`
-   - parameter placeholders `?` → `%s`
-4. `REAL` timestamps → `TIMESTAMPTZ` if you want proper time types (optional).
-
-Because every query lives in `db.py`, nothing else in the app changes. For your
-**modules'** own SQLite data (auth users, dbkeys graph), keep them as-is for now;
-migrate them the same way, one module at a time, only if they need to be shared
-across web sessions.
-
-## Security notes before you expose this
-
-- Web passwords use PBKDF2-SHA256 (200k iterations) + per-user salt. Fine to start;
-  consider `argon2` for production.
-- Set `REQUIRE_AUTH=1` to force login before any command runs.
-- Some modules touch the filesystem, network, or devices. Before putting this on a
-  LAN, decide which modules are safe to expose and gate the rest — the catalog
-  endpoint makes it easy to all-/deny-list by module name in `bridge.execute`.
-- Add CORS limits and a reverse proxy (caddy/nginx) with TLS when it leaves
-  localhost.
-```
+- Passwords are bcrypt-hashed (`passlib`); `bcrypt<4.1` is pinned in
+  `requirements.txt` — newer bcrypt breaks passlib's own self-test on
+  register/login.
+- JWT access + refresh tokens; set a real `JWT_SECRET` in `.env` before
+  this leaves your machine (the shipped one is `dev_only_...`).
+- Rate limiting is enforced per-user on `/api/exec`.
+- `GET /api/blocked` shows exactly what's disabled in the current mode and
+  why — check it after any policy or module-tier change.
