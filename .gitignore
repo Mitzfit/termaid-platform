@@ -18,11 +18,12 @@ node_modules/
 # Rust build output
 target/
 
-# Leftover scaffolding from the original build attempt — real system lives in
-# backend/ and termaid-cli/. Not tracked here; see README.md.
-termaid-platform/
-frontend/
-native/
+# Vite build output
+frontend/dist/
+
+# Superseded scaffolding from the original build attempt, archived rather
+# than deleted (own git history + planning docs). Not tracked here.
+_archive/
 mobile/
 mnt/
 *.tar.gz

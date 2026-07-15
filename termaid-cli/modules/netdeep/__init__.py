@@ -105,7 +105,8 @@ class NetDeepModule(Module):
         if self._which("iwconfig"):
             r = self._run(["iwconfig"], timeout=5)
             return f"[nd] WiFi info (iwconfig — old):\n{r.stdout or r.stderr}"
-        return "[nd] No WiFi tools found. Install: sudo apt install iw wireless-tools"
+        return ("[nd] No WiFi tools found. Install: apt install iw wireless-tools  /  "
+                "pkg install iw  (Termux; wireless-tools not packaged there)")
 
     @safe
     def cmd_wifi_scan(self, arg=""):
@@ -182,7 +183,7 @@ class NetDeepModule(Module):
                     "  Get-NetAdapterAdvancedProperty -Name *wifi*    (look for 'Country Region')\n"
                     "  Or device manager -> NIC -> Advanced -> Country Region")
         if not self._which("iw"):
-            return "[nd] Install iw: sudo apt install iw"
+            return "[nd] Install iw: apt install iw  /  pkg install iw"
         r = self._run(["iw", "reg", "get"], timeout=5)
         lines = [f"[nd] Wireless regulatory domain:\n{r.stdout}"]
         lines.append("\n  Set domain (requires root):")
@@ -202,7 +203,7 @@ class NetDeepModule(Module):
                 "Format-List Name,Status,LinkSpeed,MediaType,FullDuplex,MtuSize", timeout=10)
             return f"[nd] Ethernet adapters:\n{r.stdout or r.stderr}"
         if not self._which("ethtool"):
-            return "[nd] Install ethtool: sudo apt install ethtool"
+            return "[nd] Install ethtool: apt install ethtool  /  pkg install ethtool"
         # Find ethernet interfaces
         r = self._run("ip -brief link | grep -E 'eth|enp|eno' | awk '{print $1}'",
                       timeout=5, shell=True)
@@ -313,7 +314,8 @@ class NetDeepModule(Module):
         if self._which("hciconfig"):
             r = self._run(["hciconfig", "-a"], timeout=5)
             return f"[nd] Bluetooth (hciconfig — old):\n{r.stdout or r.stderr}"
-        return "[nd] No Bluetooth tools. Install: sudo apt install bluez"
+        return ("[nd] No Bluetooth tools. Install: apt install bluez  "
+                "(not available on Termux — no BlueZ/D-Bus system service there)")
 
     @safe
     def cmd_dns_cache(self, arg=""):
@@ -395,7 +397,7 @@ class NetDeepModule(Module):
                     f"  CLI: wg.exe show / wg.exe show all")
         if not self._which("wg"):
             return ("[nd] WireGuard tools not installed.\n"
-                    "  Install: sudo apt install wireguard wireguard-tools")
+                    "  Install: apt install wireguard wireguard-tools  /  pkg install wireguard-tools")
         r = self._run(["sudo", "-n", "wg", "show"], timeout=5)
         if r.returncode != 0:
             r = self._run(["wg", "show"], timeout=5)

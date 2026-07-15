@@ -1,15 +1,22 @@
-"""Repo Module — Multi-repo git status registry.
+"""Repo Module — Multi-repo git status registry, with clone-to-register.
 
 Distinct from /git (which operates on one "active repo" at a time and can
-mutate it — commit, push, reset): this only tracks a name -> path mapping
-of repos you care about and reports read-only status (branch, dirty
-count) across all of them in one view. Never runs a mutating git command.
+mutate it — commit, push, reset): this tracks a name -> path mapping of
+repos you care about and reports read-only status (branch, dirty count)
+across all of them in one view. The only thing here that isn't read-only
+is `clone`, which fetches a NEW repo from a URL — bounded by a generous
+but real timeout (large repos take a while, but not forever), refuses to
+clone into a non-empty destination so it can never silently overwrite
+something already there, and passes the URL to git as a single list-form
+argument (never a shell string), so there's no injection surface
+regardless of what's in the URL.
 
-Commands (~4):
-  /repo add <name> <path>      Register a repo
-  /repo list                     Show status across every registered repo
-  /repo remove <name> confirm      Unregister a repo
-  /repo explain                      How this module works
+Commands (~5):
+  /repo clone <url> <name> [dest]      Clone a repo and register it in one step
+  /repo add <name> <path>                Register an already-cloned repo
+  /repo list                               Show status across every registered repo
+  /repo remove <name> confirm                Unregister a repo (doesn't delete the directory)
+  /repo explain                                How this module works
 """
 
 import json
@@ -32,8 +39,9 @@ class RepoModule(Module):
     author = "termaid"
 
     def on_load(self):
-        for cmd in ["add", "list", "remove", "explain"]:
+        for cmd in ["clone", "add", "list", "remove", "explain"]:
             self.register_command(cmd, getattr(self, f"cmd_{cmd}"))
+        self._clones_dir = None  # set lazily in cmd_clone if no dest is given
         home = Path.home()
         if sys.platform == "win32":
             data_dir = Path(os.environ.get("APPDATA", str(home / "AppData/Roaming"))) / "termaid"
@@ -69,8 +77,46 @@ class RepoModule(Module):
             return None
 
     @safe
+    def cmd_clone(self, arg=""):
+        """Clone a repo and register it in one step: /repo clone <url> <name> [dest]"""
+        parts = (arg or "").split()
+        if len(parts) < 2:
+            return "[repo] Usage: /repo clone <url> <name> [dest]"
+        url, name = parts[0], parts[1]
+        if name in self._data:
+            return f"[repo] '{name}' is already registered -> {self._data[name]}"
+
+        if len(parts) > 2:
+            dest = Path(" ".join(parts[2:])).expanduser()
+        else:
+            home = Path.home()
+            if sys.platform == "win32":
+                clones_root = Path(os.environ.get("APPDATA", str(home / "AppData/Roaming"))) / "termaid" / "clones"
+            else:
+                clones_root = home / ".termaid" / "clones"
+            clones_root.mkdir(parents=True, exist_ok=True)
+            dest = clones_root / name
+
+        if dest.exists() and any(dest.iterdir()):
+            return f"[repo] Refusing to clone into non-empty directory: {dest}"
+
+        try:
+            r = subprocess.run(["git", "clone", url, str(dest)], capture_output=True,
+                                text=True, timeout=300, encoding="utf-8", errors="replace")
+        except subprocess.TimeoutExpired:
+            return "[repo] Clone timed out after 300s — the repo may be very large, or the URL unreachable."
+        except Exception as e:
+            return f"[repo] Failed: {e}"
+        if r.returncode != 0:
+            return f"[repo] Clone failed: {(r.stderr or r.stdout).strip()}"
+
+        self._data[name] = str(dest.resolve())
+        self._save()
+        return f"[repo] Cloned '{name}' from {url} -> {dest}"
+
+    @safe
     def cmd_add(self, arg=""):
-        """Register a repo: /repo add <name> <path>"""
+        """Register an already-cloned repo: /repo add <name> <path>"""
         parts = (arg or "").split(maxsplit=1)
         if len(parts) < 2:
             return "[repo] Usage: /repo add <name> <path>"

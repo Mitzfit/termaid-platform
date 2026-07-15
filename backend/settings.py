@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # --- where your existing TermAId CLI project lives ---
     termaid_root: str = str(
         Path(__file__).resolve().parents[2] /
-        "termaid-complete-windows")
+        "termaid-cli")
 
     # --- deployment mode: "local" (trusted device) | "server" (remote/multi-user) ---
     deployment_mode: str = "server"
@@ -69,6 +69,15 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 30
     refresh_token_days: int = 14
+
+    # --- seeded root/admin account (app-level is_admin role, NOT the OS-level
+    # /admin CLI module) --- left as the sentinel below, bootstrap is skipped
+    # entirely and no default admin account is ever created. Set both to
+    # enable it; the operator's .env is always the source of truth for this
+    # one account (re-applied on every boot), and self-registering this exact
+    # username is rejected — it can never be claimed by anyone else.
+    admin_username: str = "CHANGE_ME_admin_username"
+    admin_password: str = "CHANGE_ME_use_a_real_password"
 
     # --- rate limiting (per client) ---
     exec_rate_per_minute: int = 60

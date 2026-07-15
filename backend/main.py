@@ -9,6 +9,7 @@ REST:
   GET  /api/blocked            what's disabled here and why
   GET  /api/history            caller's recent commands
   GET  /api/health             liveness + engine status
+  GET|POST|DELETE /api/admin/*  user management + system health (is_admin only)
 
 WebSocket  /ws/terminal?token=<access>
   client → {"type":"exec","payload":"calc.hex 255"}
@@ -55,6 +56,34 @@ from backend.runtime import resolve_termaid_root
 from backend.models import CommandHistory, RefreshSession, User
 from backend.settings import settings
 
+_ADMIN_SENTINEL_USERNAME = "CHANGE_ME_admin_username"
+
+
+async def _bootstrap_admin() -> None:
+    """Seed (or re-affirm) the one root/admin account from ADMIN_USERNAME/
+    ADMIN_PASSWORD in .env. Skipped entirely while either is still the
+    CHANGE_ME_... sentinel default, so nobody gets an admin account they
+    didn't explicitly choose. Re-applies is_admin=True and the configured
+    password on every boot, so .env is always the source of truth for this
+    one account even if its username was somehow claimed beforehand."""
+    if (settings.admin_username == _ADMIN_SENTINEL_USERNAME
+            or settings.admin_password == "CHANGE_ME_use_a_real_password"):
+        return
+    async with SessionLocal() as db:
+        user = (await db.execute(
+            select(User).where(User.username == settings.admin_username)
+        )).scalar_one_or_none()
+        password_hash = auth.hash_password(settings.admin_password)
+        if user is None:
+            db.add(User(username=settings.admin_username,
+                        password_hash=password_hash, is_admin=True))
+            print(f"[startup] seeded admin account '{settings.admin_username}'")
+        else:
+            user.is_admin = True
+            user.password_hash = password_hash
+        await db.commit()
+
+
 # One shared engine. Modules load once, filtered by the deployment policy.
 engine = Engine(
     termaid_root=resolve_termaid_root(settings.termaid_root),
@@ -68,6 +97,7 @@ engine = Engine(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_models()
+    await _bootstrap_admin()
     loaded = key_vault.hydrate_env()
     if loaded:
         print(
@@ -153,6 +183,11 @@ def _rate_ok(user_id: int) -> bool:
 async def register(
         body: schemas.UserCreate,
         db: AsyncSession = Depends(get_db)):
+    if (settings.admin_username != _ADMIN_SENTINEL_USERNAME
+            and body.username == settings.admin_username):
+        # Reserved for the seeded root/admin account — never self-service,
+        # even before _bootstrap_admin has run once.
+        raise HTTPException(status.HTTP_409_CONFLICT, "Username taken")
     exists = (await db.execute(select(User).where(User.username == body.username))).scalar_one_or_none()
     if exists:
         raise HTTPException(status.HTTP_409_CONFLICT, "Username taken")
@@ -170,6 +205,8 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
     user = (await db.execute(select(User).where(User.username == form.username))).scalar_one_or_none()
     if not user or not auth.verify_password(form.password, user.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Bad credentials")
+    if not user.is_active:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Account disabled")
     user.last_login = dt.datetime.now(dt.timezone.utc)
     access = auth.create_access_token(user.id)
     refresh, token_id, expires = auth.create_refresh_token(user.id)
@@ -196,6 +233,9 @@ async def refresh_token(
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             "Refresh token revoked")
+    user = (await db.execute(select(User).where(User.id == int(payload["sub"])))).scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found or inactive")
     return schemas.TokenPair(
         access_token=auth.create_access_token(int(payload["sub"])),
         refresh_token=body.refresh_token,
@@ -275,6 +315,83 @@ async def health():
             "commands": len(engine.commands()), "ai": engine.has_ai()}
 
 
+# --------------------------------------------------------------------------- #
+# Admin — the app-level is_admin role (seeded via ADMIN_USERNAME/PASSWORD in
+# .env, see _bootstrap_admin below). NOT the same thing as the `admin` CLI
+# module, which manages OS-level Administrator/sudo group membership on the
+# host machine — these routes are about TermAId's own user accounts.
+# --------------------------------------------------------------------------- #
+@app.get("/api/admin/users", response_model=list[schemas.AdminUserOut])
+async def admin_list_users(
+    _admin: User = Depends(auth.get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = (await db.execute(select(User).order_by(User.id))).scalars().all()
+    return rows
+
+
+@app.post("/api/admin/users/{user_id}/disable", response_model=schemas.AdminUserOut)
+async def admin_disable_user(
+    user_id: int,
+    admin: User = Depends(auth.get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    if user_id == admin.id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot disable your own admin account")
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such user")
+    user.is_active = False
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@app.post("/api/admin/users/{user_id}/enable", response_model=schemas.AdminUserOut)
+async def admin_enable_user(
+    user_id: int,
+    _admin: User = Depends(auth.get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such user")
+    user.is_active = True
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@app.delete("/api/admin/users/{user_id}")
+async def admin_delete_user(
+    user_id: int,
+    admin: User = Depends(auth.get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    if user_id == admin.id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot delete your own admin account")
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such user")
+    await db.delete(user)
+    await db.commit()
+    return {"deleted": user_id}
+
+
+@app.get("/api/admin/health")
+async def admin_health(_admin: User = Depends(auth.get_current_admin)):
+    # Reuses the existing debug module's process introspection instead of
+    # reimplementing it — same command path /api/exec uses.
+    info = engine.execute("debug.info")
+    threads = engine.execute("debug.threads")
+    return {
+        "status": "ok", "mode": engine.mode,
+        "commands": len(engine.commands()), "ai": engine.has_ai(),
+        "process": info.get("output"),
+        "threads": threads.get("output"),
+    }
+
+
 @app.post("/api/scan")
 async def scan(
     body: schemas.ScanIn,
@@ -296,18 +413,39 @@ async def scan(
 # --------------------------------------------------------------------------- #
 @app.websocket("/ws/terminal")
 async def ws_terminal(ws: WebSocket):
+    # A close(code=...) sent before accept() never reaches the client as a
+    # real WS close frame with that code — without a completed handshake,
+    # the browser just sees the handshake itself rejected (a generic
+    # "unexpected response" / close code 1006), so callers can never
+    # actually distinguish "bad token" from "network blip". Accept first,
+    # so an auth failure is delivered as a real, inspectable 4401 close.
+    await ws.accept()
+
     token = ws.query_params.get("token")
     if not token:
         await ws.close(code=4401)
         return
     try:
         payload = auth.decode_token(token)
+        if payload.get("type") != "access":
+            raise ValueError("wrong token type")
         user_id = int(payload["sub"])
     except Exception:
         await ws.close(code=4401)
         return
 
-    await ws.accept()
+    # decode_token only proves the JWT is validly signed and unexpired — it
+    # says nothing about whether the account was disabled *after* this token
+    # was issued. get_current_user (the REST path) already re-checks against
+    # the DB; without the same check here, an admin disabling a user would
+    # not actually stop them from using an already-open or freshly-opened
+    # terminal session.
+    async with SessionLocal() as db:
+        user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not user or not user.is_active:
+        await ws.close(code=4401)
+        return
+
     await ws.send_json({"type": "banner",
                         "text": f"TermAId [{engine.mode}] — {len(engine.commands())} commands, "
                                 f"AI {'enabled' if engine.has_ai() else 'disabled'}."})

@@ -21,6 +21,19 @@ class UserOut(BaseModel):
     is_admin: bool
 
 
+class AdminUserOut(BaseModel):
+    """Fuller user view for the admin user-management endpoints — UserOut
+    doesn't carry is_active/created_at/last_login."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    username: str
+    email: str | None
+    is_admin: bool
+    is_active: bool
+    created_at: dt.datetime
+    last_login: dt.datetime | None
+
+
 class TokenPair(BaseModel):
     access_token: str
     refresh_token: str

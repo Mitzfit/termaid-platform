@@ -92,3 +92,13 @@ async def get_current_user(
             status.HTTP_401_UNAUTHORIZED,
             "User not found or inactive")
     return user
+
+
+async def get_current_admin(user: User = Depends(get_current_user)) -> User:
+    """Gate for the app-level admin role (User.is_admin) — the seeded root
+    account for user management + system health. Not to be confused with the
+    unrelated `admin` CLI module, which manages OS-level Administrator/sudo
+    group membership on the host machine."""
+    if not user.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin only")
+    return user

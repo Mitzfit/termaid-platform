@@ -53,8 +53,8 @@ cd termaid-platform
 
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r backend/requirements.txt
-# optional Postgres driver: pip install -r backend/requirements-postgres.txt
+pip install -r requirements.txt
+# optional Postgres driver: pip install -r requirements-postgres.txt
 
 cp .env.example .env
 # edit .env: set TERMAID_ROOT, JWT_SECRET, DEPLOYMENT_MODE=local
@@ -129,7 +129,7 @@ cd termaid-platform
 
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r backend\requirements.txt
+pip install -r requirements.txt
 
 Copy-Item .env.example .env
 notepad .env    # set TERMAID_ROOT, JWT_SECRET, DEPLOYMENT_MODE=local
@@ -200,7 +200,7 @@ python -m venv .venv --system-site-packages
 source .venv/bin/activate
 
 # Termux-specific deps: no uvloop/httptools/asyncpg native builds
-pip install -r backend/requirements-termux.txt
+pip install -r requirements-termux.txt
 
 cp .env.example .env
 # Termux has no system editor by default; use nano:

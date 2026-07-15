@@ -38,7 +38,7 @@ SAFE_MODULES: frozenset[str] = frozenset({
     "notes", "translate", "weather", "markets", "paper", "research",
     "learn", "lessons", "persona", "style", "banner", "header", "welcome",
     "errors", "clip", "catalog", "manifest", "rules", "memory",
-    "quick", "aliases",
+    "quick", "aliases", "cyberchef",
 })
 
 # Need an AI provider but otherwise side-effect-free. Safe with a key
@@ -58,11 +58,13 @@ SYSTEM_MODULES: frozenset[str] = frozenset({
     "netscan", "nettools", "netdeep", "fsscan", "dbkeys", "sql", "apikeys",
     "keyring", "dashboard", "bots", "notify", "router", "config", "autoconfig",
     "selftest", "verify", "improve", "extras", "tools", "tmx", "termux",
+    "wireshark", "nmap", "vpn", "firewall", "dns",
 })
 
 # Irreversible / privilege-escalating / firmware-level. NEVER auto-exposed.
 # Blocked in BOTH modes unless an operator explicitly opts in per-module.
 DANGEROUS_MODULES: frozenset[str] = frozenset({
+    "mkmodule", "fswrite",
     "privesc", "sudo", "perms", "admin", "fwown", "firmware", "uefi",
     "bootmgr", "dualboot", "multiboot", "recovery", "rootguide", "device",
     "devicescan", "adb", "fastboot", "usbdeep", "disktool", "syscmd",
