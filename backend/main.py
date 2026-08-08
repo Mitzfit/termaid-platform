@@ -1,42 +1,32 @@
+
 """
 main.py — FastAPI application (policy-aware + streaming).
 
 REST:
   POST /api/auth/register | login | refresh
-  POST /api/exec                run one module command
-  GET  /api/commands           list permitted commands
-  GET  /api/modules            module metadata (+ category)
-  GET  /api/blocked            what's disabled here and why
-  GET  /api/history            caller's recent commands
-  GET  /api/health             liveness + engine status
-  GET|POST|DELETE /api/admin/*  user management + system health (is_admin only)
+  POST /api/exec            run one module command
+  GET  /api/commands        list permitted commands
+  GET  /api/modules         module metadata (+ category)
+  GET  /api/blocked         what's disabled here and why
+  GET  /api/history         caller's recent commands
+  GET  /api/health          liveness + engine status
+  WebSocket /ws/terminal?token=<access>
+      client → {"type":"exec","payload":"calc.hex 255"}
+      client → {"type":"chat","payload":"explain TCP handshake"}
+      server → {"type":"result", ok, module, output, ms}
+      server → {"type":"chat_delta","text":"..."}  (repeated)
+      server → {"type":"chat_error","text":"..."}  (on stream failure)
+      server → {"type":"chat_done"}
 
-WebSocket  /ws/terminal?token=<access>
-  client → {"type":"exec","payload":"calc.hex 255"}
-  client → {"type":"chat","payload":"explain TCP handshake"}
-  server → {"type":"result", ok, module, output, ms}
-  server → {"type":"chat_delta","text":"..."}  (repeated)
-  server → {"type":"chat_done"}
-
-Run:  uvicorn backend.main:app --reload --port 8000
+Run: uvicorn backend.main:app --reload --port 8000
 """
-
 from __future__ import annotations
-
-import sys
-import os
-
-# Add root directory to sys.path so we can run this file directly
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
 
 import datetime as dt
 import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
 
-import native
 from fastapi import (
     Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status,
 )
@@ -46,43 +36,16 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend import auth, schemas
-from backend import key_vault
-from backend.providers_extra import merge_into_cli_specs
-from backend.ai_stream import stream_chat
-from backend.database import SessionLocal, get_db, init_models
-from backend.engine import Engine
-from backend.runtime import resolve_termaid_root
-from backend.models import CommandHistory, RefreshSession, User
-from backend.settings import settings
-
-_ADMIN_SENTINEL_USERNAME = "CHANGE_ME_admin_username"
-
-
-async def _bootstrap_admin() -> None:
-    """Seed (or re-affirm) the one root/admin account from ADMIN_USERNAME/
-    ADMIN_PASSWORD in .env. Skipped entirely while either is still the
-    CHANGE_ME_... sentinel default, so nobody gets an admin account they
-    didn't explicitly choose. Re-applies is_admin=True and the configured
-    password on every boot, so .env is always the source of truth for this
-    one account even if its username was somehow claimed beforehand."""
-    if (settings.admin_username == _ADMIN_SENTINEL_USERNAME
-            or settings.admin_password == "CHANGE_ME_use_a_real_password"):
-        return
-    async with SessionLocal() as db:
-        user = (await db.execute(
-            select(User).where(User.username == settings.admin_username)
-        )).scalar_one_or_none()
-        password_hash = auth.hash_password(settings.admin_password)
-        if user is None:
-            db.add(User(username=settings.admin_username,
-                        password_hash=password_hash, is_admin=True))
-            print(f"[startup] seeded admin account '{settings.admin_username}'")
-        else:
-            user.is_admin = True
-            user.password_hash = password_hash
-        await db.commit()
-
+from . import auth, schemas
+import native
+from . import key_vault as secrets
+from .providers_extra import merge_into_cli_specs
+from .ai_stream import stream_chat
+from .database import SessionLocal, get_db, init_models
+from .engine import Engine
+from .runtime import resolve_termaid_root, is_frozen
+from .models import CommandHistory, User
+from .settings import settings
 
 # One shared engine. Modules load once, filtered by the deployment policy.
 engine = Engine(
@@ -97,23 +60,18 @@ engine = Engine(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_models()
-    await _bootstrap_admin()
-    loaded = key_vault.hydrate_env()
+    loaded = secrets.hydrate_env()
     if loaded:
-        print(
-            f"[startup] hydrated {loaded} provider key(s) from the OS keychain")
+        print(f"[startup] hydrated {loaded} provider key(s) from the OS keychain")
     added = merge_into_cli_specs()
     if added:
-        print(
-            f"[startup] added {added} extra AI provider(s): xai, together, fireworks, deepinfra")
+        print(f"[startup] added {added} extra AI provider(s): xai, together, fireworks, deepinfra")
     report = engine.load_all()
     # Wire the Rust scanner in as a native command — but only in local mode,
     # since exposing a port scanner to remote users invites abuse.
     if engine.mode == "local" and native.is_available():
         engine.register_native(
-            "scan.ports",
-            _scan_command,
-            module="scan",
+            "scan.ports", _scan_command, module="scan",
             description="fast Rust TCP port scan: scan.ports <host> [start] [end]",
         )
         if native.walker_path():
@@ -134,8 +92,8 @@ def _scan_command(arg: str) -> str:
     if not parts:
         return "usage: scan.ports <host> [start] [end] [timeout_ms]"
     host = parts[0]
-    start = int(parts[1]) if len(parts) > 1 else 1
-    end = int(parts[2]) if len(parts) > 2 else 1024
+    start = int(parts[1]) if len(parts) > 1 else 1024
+    end = int(parts[2]) if len(parts) > 2 else 300
     timeout = int(parts[3]) if len(parts) > 3 else 300
     return native.format_scan(native.scan_ports(host, start, end, timeout))
 
@@ -150,7 +108,8 @@ def _walk_command(arg: str) -> str:
     return native.format_walk(native.walk_dir(path, top_n))
 
 
-app = FastAPI(title="TermAId Platform", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="TermAId Platform", version="2.3.4", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -158,7 +117,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # --------------------------------------------------------------------------- #
 # Tiny in-memory rate limiter (per user). Swap for Redis in a scaled deploy.
@@ -180,19 +138,11 @@ def _rate_ok(user_id: int) -> bool:
 # Auth
 # --------------------------------------------------------------------------- #
 @app.post("/api/auth/register", response_model=schemas.UserOut)
-async def register(
-        body: schemas.UserCreate,
-        db: AsyncSession = Depends(get_db)):
-    if (settings.admin_username != _ADMIN_SENTINEL_USERNAME
-            and body.username == settings.admin_username):
-        # Reserved for the seeded root/admin account — never self-service,
-        # even before _bootstrap_admin has run once.
-        raise HTTPException(status.HTTP_409_CONFLICT, "Username taken")
+async def register(body: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
     exists = (await db.execute(select(User).where(User.username == body.username))).scalar_one_or_none()
     if exists:
         raise HTTPException(status.HTTP_409_CONFLICT, "Username taken")
-    user = User(username=body.username, email=body.email,
-                password_hash=auth.hash_password(body.password))
+    user = User(username=body.username, email=body.email, password_hash=auth.hash_password(body.password))
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -200,67 +150,42 @@ async def register(
 
 
 @app.post("/api/auth/login", response_model=schemas.TokenPair)
-async def login(form: OAuth2PasswordRequestForm = Depends(),
-                db: AsyncSession = Depends(get_db)):
+async def login(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
     user = (await db.execute(select(User).where(User.username == form.username))).scalar_one_or_none()
     if not user or not auth.verify_password(form.password, user.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Bad credentials")
-    if not user.is_active:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Account disabled")
     user.last_login = dt.datetime.now(dt.timezone.utc)
     access = auth.create_access_token(user.id)
     refresh, token_id, expires = auth.create_refresh_token(user.id)
-    db.add(
-        RefreshSession(
-            user_id=user.id,
-            token_id=token_id,
-            expires_at=expires))
+    # Persist the refresh session through auth (owns the RefreshSession lifecycle
+    # + revoke-on-use bookkeeping) rather than constructing the ORM row inline.
+    await auth.persist_refresh_session(db, user.id, token_id, expires)
     await db.commit()
     return schemas.TokenPair(access_token=access, refresh_token=refresh)
 
 
 @app.post("/api/auth/refresh", response_model=schemas.TokenPair)
-async def refresh_token(
-        body: schemas.RefreshIn,
-        db: AsyncSession = Depends(get_db)):
-    payload = auth.decode_token(body.refresh_token)
-    if payload.get("type") != "refresh":
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Wrong token type")
-    sess = (await db.execute(
-        select(RefreshSession).where(RefreshSession.token_id == payload.get("jti"))
-    )).scalar_one_or_none()
-    if not sess or sess.revoked:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED,
-            "Refresh token revoked")
-    user = (await db.execute(select(User).where(User.id == int(payload["sub"])))).scalar_one_or_none()
-    if not user or not user.is_active:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found or inactive")
-    return schemas.TokenPair(
-        access_token=auth.create_access_token(int(payload["sub"])),
-        refresh_token=body.refresh_token,
-    )
+async def refresh_token(body: schemas.RefreshIn, db: AsyncSession = Depends(get_db)):
+    # Rotation-on-use lives in auth: it validates the presented token, revokes it,
+    # and mints a fresh access+refresh pair. It raises 401 on a bad/revoked/expired
+    # token, so no manual decode/lookup is needed here — and reusing an old refresh
+    # token now fails, closing the replay window.
+    new_access, new_refresh = await auth.rotate_refresh_token(db, body.refresh_token)
+    return schemas.TokenPair(access_token=new_access, refresh_token=new_refresh)
 
 
 # --------------------------------------------------------------------------- #
 # Commands
 # --------------------------------------------------------------------------- #
 async def _record(db: AsyncSession, user_id: int, result: dict) -> None:
-    db.add(
-        CommandHistory(
-            user_id=user_id,
-            command=result.get("command") or "",
-            module=result.get("module"),
-            output=(
-                result.get("output") or "")[
-                :8000],
-            ok=result.get(
-                "ok",
-                False),
-            duration_ms=result.get(
-                "ms",
-                0.0),
-        ))
+    db.add(CommandHistory(
+        user_id=user_id,
+        command=result.get("command") or "",
+        module=result.get("module"),
+        output=(result.get("output") or "")[:8000],
+        ok=result.get("ok", False),
+        duration_ms=result.get("ms", 0.0),
+    ))
     await db.commit()
 
 
@@ -271,28 +196,25 @@ async def exec_command(
     db: AsyncSession = Depends(get_db),
 ):
     if not _rate_ok(user.id):
-        raise HTTPException(
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            "Rate limit exceeded")
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Rate limit exceeded")
     result = engine.execute(body.command)
-    parts = body.command.strip().lstrip("/").split(maxsplit=1)
-    result.setdefault("command", parts[0] if parts else "")
+    result.setdefault("command", body.command.strip().lstrip("/").split(maxsplit=1)[0])
     await _record(db, user.id, result)
     return result
 
 
 @app.get("/api/commands")
-async def list_commands(_user: User = Depends(auth.get_current_user)):
+async def list_commands(user: User = Depends(auth.get_current_user)):
     return {"count": len(engine.commands()), "commands": engine.commands()}
 
 
 @app.get("/api/modules")
-async def list_modules(_user: User = Depends(auth.get_current_user)):
+async def list_modules(user: User = Depends(auth.get_current_user)):
     return engine.modules()
 
 
 @app.get("/api/blocked")
-async def list_blocked(_user: User = Depends(auth.get_current_user)):
+async def list_blocked(user: User = Depends(auth.get_current_user)):
     return {"mode": engine.mode, "blocked": engine.blocked()}
 
 
@@ -315,96 +237,17 @@ async def health():
             "commands": len(engine.commands()), "ai": engine.has_ai()}
 
 
-# --------------------------------------------------------------------------- #
-# Admin — the app-level is_admin role (seeded via ADMIN_USERNAME/PASSWORD in
-# .env, see _bootstrap_admin below). NOT the same thing as the `admin` CLI
-# module, which manages OS-level Administrator/sudo group membership on the
-# host machine — these routes are about TermAId's own user accounts.
-# --------------------------------------------------------------------------- #
-@app.get("/api/admin/users", response_model=list[schemas.AdminUserOut])
-async def admin_list_users(
-    _admin: User = Depends(auth.get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    rows = (await db.execute(select(User).order_by(User.id))).scalars().all()
-    return rows
-
-
-@app.post("/api/admin/users/{user_id}/disable", response_model=schemas.AdminUserOut)
-async def admin_disable_user(
-    user_id: int,
-    admin: User = Depends(auth.get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    if user_id == admin.id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot disable your own admin account")
-    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
-    if not user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such user")
-    user.is_active = False
-    await db.commit()
-    await db.refresh(user)
-    return user
-
-
-@app.post("/api/admin/users/{user_id}/enable", response_model=schemas.AdminUserOut)
-async def admin_enable_user(
-    user_id: int,
-    _admin: User = Depends(auth.get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
-    if not user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such user")
-    user.is_active = True
-    await db.commit()
-    await db.refresh(user)
-    return user
-
-
-@app.delete("/api/admin/users/{user_id}")
-async def admin_delete_user(
-    user_id: int,
-    admin: User = Depends(auth.get_current_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    if user_id == admin.id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot delete your own admin account")
-    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
-    if not user:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such user")
-    await db.delete(user)
-    await db.commit()
-    return {"deleted": user_id}
-
-
-@app.get("/api/admin/health")
-async def admin_health(_admin: User = Depends(auth.get_current_admin)):
-    # Reuses the existing debug module's process introspection instead of
-    # reimplementing it — same command path /api/exec uses.
-    info = engine.execute("debug.info")
-    threads = engine.execute("debug.threads")
-    return {
-        "status": "ok", "mode": engine.mode,
-        "commands": len(engine.commands()), "ai": engine.has_ai(),
-        "process": info.get("output"),
-        "threads": threads.get("output"),
-    }
-
-
 @app.post("/api/scan")
 async def scan(
     body: schemas.ScanIn,
-    _user: User = Depends(auth.get_current_user),
+    user: User = Depends(auth.get_current_user),
 ):
     """Structured Rust port scan. Local mode only (network action)."""
     if engine.mode != "local":
-        raise HTTPException(status.HTTP_403_FORBIDDEN,
-                            "scanning is disabled in server mode")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "scanning is disabled in server mode")
     if not native.is_available():
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "scanner binary not built (cd native && cargo build --release)")
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            "scanner binary not built (cd native && cargo build --release)")
     return native.scan_ports(body.host, body.start, body.end, body.timeout_ms)
 
 
@@ -413,39 +256,18 @@ async def scan(
 # --------------------------------------------------------------------------- #
 @app.websocket("/ws/terminal")
 async def ws_terminal(ws: WebSocket):
-    # A close(code=...) sent before accept() never reaches the client as a
-    # real WS close frame with that code — without a completed handshake,
-    # the browser just sees the handshake itself rejected (a generic
-    # "unexpected response" / close code 1006), so callers can never
-    # actually distinguish "bad token" from "network blip". Accept first,
-    # so an auth failure is delivered as a real, inspectable 4401 close.
-    await ws.accept()
-
     token = ws.query_params.get("token")
     if not token:
         await ws.close(code=4401)
         return
     try:
         payload = auth.decode_token(token)
-        if payload.get("type") != "access":
-            raise ValueError("wrong token type")
         user_id = int(payload["sub"])
     except Exception:
         await ws.close(code=4401)
         return
 
-    # decode_token only proves the JWT is validly signed and unexpired — it
-    # says nothing about whether the account was disabled *after* this token
-    # was issued. get_current_user (the REST path) already re-checks against
-    # the DB; without the same check here, an admin disabling a user would
-    # not actually stop them from using an already-open or freshly-opened
-    # terminal session.
-    async with SessionLocal() as db:
-        user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
-    if not user or not user.is_active:
-        await ws.close(code=4401)
-        return
-
+    await ws.accept()
     await ws.send_json({"type": "banner",
                         "text": f"TermAId [{engine.mode}] — {len(engine.commands())} commands, "
                                 f"AI {'enabled' if engine.has_ai() else 'disabled'}."})
@@ -461,14 +283,28 @@ async def ws_terminal(ws: WebSocket):
                                         "text": "[AI disabled: set AI_PROVIDER + key]"})
                     await ws.send_json({"type": "chat_done"})
                     continue
-                full = []
-                async for chunk in stream_chat(settings.ai_provider, payload_text):
-                    full.append(chunk)
-                    await ws.send_json({"type": "chat_delta", "text": chunk})
+                # Structured streaming: ai_stream yields typed events
+                # ({"kind": "delta"|"error"|"done"}) instead of bare text, so we
+                # branch on kind rather than sniffing the string. Only real delta
+                # text is accumulated for history; an error is surfaced as its own
+                # WS frame and marks the turn failed.
+                full: list[str] = []
+                ok = True
+                async for ev in stream_chat(settings.ai_provider, payload_text, events=True):
+                    ev_kind = ev.get("kind")
+                    if ev_kind == "delta":
+                        text = ev.get("text", "")
+                        full.append(text)
+                        await ws.send_json({"type": "chat_delta", "text": text})
+                    elif ev_kind == "error":
+                        ok = False
+                        await ws.send_json({"type": "chat_error", "text": ev.get("text", "")})
+                    # "done" is handled once, after the loop, so the client always
+                    # gets exactly one terminating chat_done frame.
                 await ws.send_json({"type": "chat_done"})
                 async with SessionLocal() as db:
                     await _record(db, user_id, {
-                        "command": "chat", "module": "ai", "ok": True,
+                        "command": "chat", "module": "ai", "ok": ok,
                         "output": "".join(full)[:8000], "ms": 0.0})
 
             else:  # exec
@@ -477,8 +313,7 @@ async def ws_terminal(ws: WebSocket):
                                         "output": "rate limit exceeded", "ms": 0.0})
                     continue
                 result = engine.execute(payload_text)
-                result["command"] = payload_text.lstrip(
-                    "/").split(maxsplit=1)[0] if payload_text else ""
+                result["command"] = payload_text.lstrip("/").split(maxsplit=1)[0] if payload_text else ""
                 await ws.send_json({"type": "result", **result})
                 async with SessionLocal() as db:
                     await _record(db, user_id, result)
@@ -487,11 +322,8 @@ async def ws_terminal(ws: WebSocket):
 
 
 # Serve the built frontend (Vite build output) when present.
+import os
 _dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 if os.path.isdir(_dist):
     app.mount("/", StaticFiles(directory=_dist, html=True), name="frontend")
 
-if __name__ == "__main__":
-    import uvicorn
-    print("Starting TermAId backend server from main.py...")
-    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)
