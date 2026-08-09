@@ -33,3 +33,4 @@ mnt/
 .DS_Store
 Thumbs.db
 .jwt_secret
+.jwt_secret
