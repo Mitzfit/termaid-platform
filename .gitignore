@@ -32,3 +32,4 @@ mnt/
 # OS cruft
 .DS_Store
 Thumbs.db
+.jwt_secret
