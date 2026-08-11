@@ -1,183 +1,115 @@
-// main.ts — app wiring: login → terminal → websocket (exec + streaming chat).
+import './style.css';
+import 'xterm/css/xterm.css';
+import { Terminal } from 'xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import { ApiClient, TokenStore } from './api';
 
-import { api, tokens } from "./api";
-import { TerminalSocket } from "./ws";
-import { Terminal } from "./terminal";
-import { nativeScan, formatScan, nativeWalk, formatWalk, isTauri } from "./native";
-import "./style.css";
-
-const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
-  document.getElementById(id) as T;
-
-let term: Terminal;
-let socket: TerminalSocket;
-const cmdHistory: string[] = [];
-let histIdx = 0;
-
-function setStatus(text: string, live: boolean) {
-  const el = $("status");
-  el.textContent = text;
-  el.className = "status" + (live ? " live" : "");
+const initApp = () => {
+  const getEl = (id: string) => document.getElementById(id);
+  const loginPanel = getEl('login') as HTMLDivElement | null;
+  const appPanel = getEl('app') as HTMLDivElement | null;
+  const usernameInput = getEl('username') as HTMLInputElement | null;
+  const passwordInput = getEl('password') as HTMLInputElement | null;
+  const loginBtn = getEl('loginBtn') as HTMLButtonElement | null;
+  const authMsg = getEl('authMsg') as HTMLDivElement | null;
+  const logoutBtn = getEl('logoutBtn') as HTMLButtonElement | null;
   
-  const dot = $("statusDot");
-  if (dot) dot.className = "dot" + (live ? " live" : "");
-}
+  const mobileForm = getEl('mobile-form') as HTMLFormElement | null;
+  const mobileCmd = getEl('mobile-cmd') as HTMLInputElement | null;
+  const icons = document.querySelectorAll('.icon-btn');
+  const pages = document.querySelectorAll('.app-page');
 
-function enterApp() {
-  $("login").classList.add("hidden");
-  $("app").classList.remove("hidden");
+  const store = new TokenStore();
+  const api = new ApiClient();
+  let term: Terminal | null = null;
+  let ws: WebSocket | null = null;
 
-  term = new Terminal($("terminal"));
-  socket = new TerminalSocket({
-    onBanner: (t) => term.banner(t),
-    onResult: (m) => {
-      if (m.output) term.out(m.output, !m.ok);
-      term.meta(`${m.module ?? "?"} · ${m.ms}ms`);
-    },
-    onChatDelta: (t) => term.appendStream(t),
-    onChatDone: () => term.endStream(),
-    onStatus: (c) => setStatus(c ? "● live" : "○ reconnecting…", c),
-    onAuthFailed: () => logout(),
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const iconBtn = target.closest('.icon-btn');
+    if (iconBtn) {
+      const targetId = iconBtn.getAttribute('data-target');
+      if (!targetId) return;
+      icons.forEach(i => i.classList.remove('active'));
+      iconBtn.classList.add('active');
+      pages.forEach(p => p.classList.add('hidden'));
+      const targetPage = getEl(targetId);
+      if (targetPage) targetPage.classList.remove('hidden');
+      if (targetId === 'page-terminal') term?.focus();
+    }
+    const macroBtn = target.closest('.macro-btn');
+    if (macroBtn) {
+      const cmd = macroBtn.getAttribute('data-cmd');
+      if (cmd) executeMacro(cmd);
+    }
   });
-  socket.connect();
-  $("cmd").focus();
-}
 
-function handleInput() {
-  const input = $<HTMLInputElement>("cmd");
-  const line = input.value.trim();
-  if (!line) return;
-  term.echo(line);
-  cmdHistory.push(line);
-  histIdx = cmdHistory.length;
-  input.value = "";
-
-  if (line === "clear") { term.clear(); return; }
-
-  // "health" / "blocked" → thin wrappers over the backend's status endpoints
-  // (neither is otherwise surfaced anywhere in the UI).
-  if (line === "health") {
-    api.health()
-      .then((h) => term.out(`status=${h.status}  mode=${h.mode}  commands=${h.commands}  ai=${h.ai}`))
-      .catch((err) => term.out(String(err), true));
-    return;
-  }
-  if (line === "blocked") {
-    api.blocked()
-      .then((b) => {
-        const entries = Object.entries(b.blocked);
-        if (entries.length === 0) { term.out(`[${b.mode}] no modules blocked`); return; }
-        term.out(`[${b.mode}] blocked modules:\n` + entries.map(([m, r]) => `  ${m}: ${r}`).join("\n"));
-      })
-      .catch((err) => term.out(String(err), true));
-    return;
+  function executeMacro(cmd: string) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(cmd + '\r');
+      document.querySelector<HTMLElement>('[data-target="page-terminal"]')?.click();
+    }
   }
 
-  // "admin-users" / "admin-health" → the seeded root account's user
-  // management + system health views. The API 403s non-admins cleanly.
-  if (line === "admin-users") {
-    api.adminUsers()
-      .then((users) => {
-        const lines = users.map((u) =>
-          `  ${u.id}  ${u.username}${u.is_admin ? " (admin)" : ""}${u.is_active ? "" : " [disabled]"}`);
-        term.out(`[admin] ${users.length} user(s):\n` + lines.join("\n"));
-      })
-      .catch((err) => term.out(String(err), true));
-    return;
-  }
-  if (line === "admin-health") {
-    api.adminHealth()
-      .then((h) => {
-        term.out(`status=${h.status}  mode=${h.mode}  commands=${h.commands}  ai=${h.ai}\n\n${h.process}\n\n${h.threads}`);
-      })
-      .catch((err) => term.out(String(err), true));
-    return;
+  if (mobileForm && mobileCmd) {
+    mobileForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (ws && ws.readyState === WebSocket.OPEN && mobileCmd.value.trim() !== '') {
+        ws.send(mobileCmd.value + '\r');
+      }
+      mobileCmd.value = '';
+    });
   }
 
-  // "scan <host> [start] [end]" → native bridge (in-process on Tauri, /api/scan in browser)
-  if (line.startsWith("scan ")) {
-    const [, host, s, e] = line.split(/\s+/);
-    term.meta(isTauri() ? "scanning natively (Rust, in-process)…" : "scanning via backend…");
-    nativeScan(host, s ? Number(s) : 1, e ? Number(e) : 1024)
-      .then((r) => { const f = formatScan(r); term.out(f.output); term.meta(`scan · ${r.ms}ms`); })
-      .catch((err) => term.out(String(err), true));
-    return;
+  function startWorkspace() {
+    loginPanel?.classList.add('hidden');
+    appPanel?.classList.remove('hidden');
+
+    const termContainer = getEl('terminal');
+    if (!termContainer) return;
+    termContainer.innerHTML = ''; 
+
+    term = new Terminal({
+        theme: { background: 'transparent', foreground: '#e0f2fe', cursor: '#00e6e6', selectionBackground: 'rgba(0, 230, 230, 0.3)' },
+        fontFamily: '"JetBrains Mono", monospace', fontSize: 14, cursorBlink: true
+    });
+    
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(termContainer);
+    fitAddon.fit();
+    window.addEventListener('resize', () => fitAddon.fit());
+
+    ws = new WebSocket(`ws://localhost:8000/api/pty`);
+    ws.binaryType = 'arraybuffer';
+    
+    ws.onmessage = (evt) => {
+        if (typeof evt.data === 'string') term?.write(evt.data);
+        else term?.write(new Uint8Array(evt.data));
+    };
+
+    term.onData(data => {
+        if (ws?.readyState === WebSocket.OPEN) ws.send(data);
+    });
   }
 
-  // "walk <path> [topN]" → native fast directory walk (Tauri in-process / backend)
-  if (line.startsWith("walk ")) {
-    const [, path, n] = line.split(/\s+/);
-    term.meta(isTauri() ? "walking natively (Rust, in-process)…" : "walking via backend…");
-    nativeWalk(path, n ? Number(n) : 10)
-      .then((r) => { const f = formatWalk(r); term.out(f.output); term.meta(`walk · ${r.ms}ms`); })
-      .catch((err) => term.out(String(err), true));
-    return;
-  }
+  if (store.access) startWorkspace();
+  else loginPanel?.classList.remove('hidden');
 
-  // "?" or "ask " prefix → stream an AI chat; otherwise run a module command.
-  if (line.startsWith("?") || line.startsWith("ask ")) {
-    const prompt = line.replace(/^(\?|ask )/, "").trim();
-    term.beginStream();
-    socket.chat(prompt);
-  } else {
-    socket.exec(line);
-  }
-}
+  loginBtn?.addEventListener('click', async () => {
+    if (authMsg) authMsg.textContent = 'Authenticating...';
+    try {
+      const pair = await api.login(usernameInput?.value || '', passwordInput?.value || '');
+      store.set(pair);
+      startWorkspace();
+    } catch (err: any) {
+      if (authMsg) authMsg.textContent = err.message || 'Login failed';
+    }
+  });
 
-// ---- auth handlers ----
-async function doLogin() {
-  try {
-    await api.login(
-      $<HTMLInputElement>("username").value.trim(),
-      $<HTMLInputElement>("password").value,
-    );
-    enterApp();
-  } catch {
-    authMsg("login failed — check credentials", true);
-  }
-}
-
-async function doRegister() {
-  const u = $<HTMLInputElement>("username").value.trim();
-  const p = $<HTMLInputElement>("password").value;
-  if (u.length < 2 || p.length < 4) return authMsg("username ≥2, password ≥4", true);
-  try {
-    await api.register(u, p);
-    authMsg("account created — logging in…", false);
-    await doLogin();
-  } catch (e) {
-    authMsg(String(e).includes("409") ? "username taken" : "registration failed", true);
-  }
-}
-
-function authMsg(text: string, err: boolean) {
-  const el = $("authMsg");
-  el.textContent = text;
-  el.className = "msg " + (err ? "error" : "ok");
-}
-
-function logout() {
-  tokens.clear();
-  socket?.close();
-  location.reload();
-}
-
-// ---- events ----
-$("loginBtn").onclick = doLogin;
-$("registerBtn").onclick = doRegister;
-$("logoutBtn").onclick = logout;
-$("password").addEventListener("keydown", (e) => { if ((e as KeyboardEvent).key === "Enter") doLogin(); });
-
-$("cmd").addEventListener("keydown", (ev) => {
-  const e = ev as KeyboardEvent;
-  const input = $<HTMLInputElement>("cmd");
-  if (e.key === "Enter") handleInput();
-  else if (e.key === "ArrowUp") { if (histIdx > 0) input.value = cmdHistory[--histIdx]; e.preventDefault(); }
-  else if (e.key === "ArrowDown") {
-    if (histIdx < cmdHistory.length - 1) input.value = cmdHistory[++histIdx];
-    else { histIdx = cmdHistory.length; input.value = ""; }
-    e.preventDefault();
-  }
-});
-
-if (tokens.access) enterApp();
+  logoutBtn?.addEventListener('click', () => {
+    store.clear();
+    window.location.reload();
+  });
+};
+initApp();

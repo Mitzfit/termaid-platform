@@ -15,7 +15,7 @@ import uuid
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,16 +23,19 @@ from .database import get_db
 from .models import User
 from .settings import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
-def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+def hash_password(plain):
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
 
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+def verify_password(plain, hashed):
+    try:
+        return bcrypt.checkpw(plain.encode(), hashed.encode())
+    except:
+        return False
 
 
 def _now() -> dt.datetime:
@@ -102,3 +105,8 @@ async def get_current_admin(user: User = Depends(get_current_user)) -> User:
     if not user.is_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin only")
     return user
+
+
+async def persist_refresh_session(*args, **kwargs):
+    pass
+

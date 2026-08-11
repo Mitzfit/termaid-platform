@@ -1,90 +1,50 @@
-// api.ts — typed REST client. Handles auth + token storage + auto-refresh.
+export class TokenStore {
+  get access(): string | null {
+    return localStorage.getItem('termaid_access_token');
+  }
 
-import type { TokenPair, CommandResult, ModuleMeta, HistoryItem, Health, Blocked, AdminUser, AdminHealth } from "./types";
+  set(tokens: any) {
+    if (tokens && tokens.access_token) {
+      localStorage.setItem('termaid_access_token', tokens.access_token);
+    } else if (typeof tokens === 'string') {
+      localStorage.setItem('termaid_access_token', tokens);
+    }
+  }
 
-const BASE = import.meta.env.VITE_API_BASE ?? "";
-
-const store = {
-  get access() { return localStorage.getItem("termaid_access"); },
-  get refresh() { return localStorage.getItem("termaid_refresh"); },
-  set(pair: TokenPair) {
-    localStorage.setItem("termaid_access", pair.access_token);
-    localStorage.setItem("termaid_refresh", pair.refresh_token);
-  },
   clear() {
-    localStorage.removeItem("termaid_access");
-    localStorage.removeItem("termaid_refresh");
-  },
-};
-
-export const tokens = store;
-
-async function request<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
-  const headers = new Headers(init.headers);
-  if (store.access) headers.set("Authorization", `Bearer ${store.access}`);
-  const res = await fetch(`${BASE}${path}`, { ...init, headers });
-
-  if (res.status === 401 && retry && store.refresh) {
-    const refreshed = await tryRefresh();
-    if (refreshed) return request<T>(path, init, false);
-  }
-  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-  return res.json() as Promise<T>;
-}
-
-export async function tryRefresh(): Promise<boolean> {
-  try {
-    const res = await fetch(`${BASE}/api/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: store.refresh }),
-    });
-    if (!res.ok) return false;
-    store.set(await res.json());
-    return true;
-  } catch {
-    return false;
+    localStorage.removeItem('termaid_access_token');
   }
 }
 
-export const api = {
-  async register(username: string, password: string, email?: string): Promise<void> {
-    const res = await fetch(`${BASE}/api/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password, email }),
+export class ApiClient {
+  async login(username: string, password: string): Promise<any> {
+    const formData = new URLSearchParams();
+    formData.append('username', username);
+    formData.append('password', password);
+
+    // Attempt standard FastAPI OAuth2 login route
+    let response = await fetch('http://localhost:8000/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: formData.toString()
     });
-    if (!res.ok) throw new Error(await res.text());
-  },
 
-  async login(username: string, password: string): Promise<TokenPair> {
-    const body = new URLSearchParams({ username, password });
-    const res = await fetch(`${BASE}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
-    if (!res.ok) throw new Error("login failed");
-    const pair: TokenPair = await res.json();
-    store.set(pair);
-    return pair;
-  },
+    // Fallback if your backend uses a different endpoint route
+    if (response.status === 404) {
+      response = await fetch('http://localhost:8000/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString()
+      });
+    }
 
-  exec: (command: string) =>
-    request<CommandResult>("/api/exec", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command }),
-    }),
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || 'Authentication failed. Check credentials.');
+    }
 
-  commands: () => request<{ count: number; commands: string[] }>("/api/commands"),
-  modules: () => request<Record<string, ModuleMeta>>("/api/modules"),
-  history: (limit = 50) => request<HistoryItem[]>(`/api/history?limit=${limit}`),
-  health: () => request<Health>("/api/health"),
-  blocked: () => request<Blocked>("/api/blocked"),
-
-  // Admin-only (is_admin) — the API 403s cleanly for non-admins, so there's
-  // no separate client-side gating needed here.
-  adminUsers: () => request<AdminUser[]>("/api/admin/users"),
-  adminHealth: () => request<AdminHealth>("/api/admin/health"),
-};
+    return await response.json();
+  }
+}

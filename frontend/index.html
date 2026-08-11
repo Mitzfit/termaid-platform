@@ -3,42 +3,91 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TermAId</title>
+  <title>TermAId Pro Ecosystem</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
+  <canvas id="particle-canvas" style="position:fixed; top:0; left:0; width:100%; height:100%; z-index:0; pointer-events:none; opacity:0.5;"></canvas>
 
-  <!-- Login Panel -->
-  <div id="login" class="panel">
-    <h1>TermAId</h1>
-    <div class="sub">Enter your credentials to continue.</div>
-    <input type="text" id="username" placeholder="Username" autocomplete="username">
-    <input type="password" id="password" placeholder="Password" autocomplete="current-password">
-    <div class="row">
-      <button id="loginBtn">Log in</button>
-      <button id="registerBtn" class="ghost">Create account</button>
-    </div>
-    <div id="authMsg" class="msg"></div>
-  </div>
-
-  <!-- Main App -->
-  <div id="app" class="hidden">
-    <header>
-      <div class="dot live" id="statusDot"></div>
-      <div class="title">TermAId</div>
-      <div id="status" class="status">connecting...</div>
-      <button id="logoutBtn" class="ghost small" style="margin-left: 1rem;">Logout</button>
-    </header>
-    
-    <div id="terminal" class="terminal" aria-live="polite"></div>
-    
-    <div class="inputline">
-      <span class="prompt">›</span>
-      <input type="text" id="cmd" placeholder="type a command or ask a question..." autocomplete="off" spellcheck="false" autofocus>
+  <!-- LOGIN SCREEN -->
+  <div id="login" class="window-panel center-screen hidden" style="z-index: 10;">
+    <div class="window-titlebar"><div class="window-controls"><span class="dot close"></span></div><div class="window-title">Secure Node Auth</div></div>
+    <div class="window-content">
+      <h2>Ecosystem Access</h2>
+      <input type="text" id="username" placeholder="Root Username" autocomplete="username">
+      <input type="password" id="password" placeholder="Passphrase" autocomplete="current-password">
+      <div class="row"><button id="loginBtn" class="btn-primary">Establish Secure Connection</button></div>
+      <div id="authMsg" class="msg"></div>
     </div>
   </div>
 
+  <!-- MAIN ENVIRONMENT -->
+  <div id="app" class="desktop-env hidden" style="z-index: 5; position: relative; background: transparent;">
+    <div class="desktop-titlebar">
+      <div class="window-controls"><span class="dot close"></span><span class="dot min"></span><span class="dot max"></span></div>
+      <div class="app-title">TermAId Core Ecosystem</div>
+      <div class="window-actions"><span style="font-size: 11px; color: var(--primary-cyan);">SYS_ONLINE</span></div>
+    </div>
+
+    <div class="desktop-workspace">
+      <!-- SIDEBAR -->
+      <div class="activity-bar">
+        <div class="icon-btn active" data-target="page-terminal"><span class="icon">⌨️</span><span class="label">Term</span></div>
+        <div class="icon-btn" data-target="page-brain"><span class="icon">🧠</span><span class="label">Brain</span></div>
+        <div class="icon-btn" data-target="page-modules"><span class="icon">🧩</span><span class="label">Mods</span></div>
+        <div class="icon-btn" data-target="page-network"><span class="icon">🌐</span><span class="label">Net</span></div>
+        <div class="icon-btn" data-target="page-plugins"><span class="icon">🔌</span><span class="label">Plugs</span></div>
+        <div style="flex: 1;"></div>
+        <div class="icon-btn" data-target="page-settings"><span class="icon">⚙️</span><span class="label">Config</span></div>
+        <div class="icon-btn" data-target="page-account"><span class="icon">👤</span><span class="label">Session</span></div>
+      </div>
+
+      <div class="pages-container">
+        <!-- TERMINAL (MOBILE FORM RESTORED) -->
+        <div id="page-terminal" class="app-page">
+          <div class="terminal-container" style="background: rgba(3, 8, 17, 0.7); backdrop-filter: blur(8px); display: flex; flex-direction: column; height: 100%;">
+            <div id="terminal" class="terminal-output" aria-live="polite" style="flex: 1; overflow-y: auto;"></div>
+            
+            <form id="mobile-form" style="display: flex; padding: 15px; background: rgba(0,0,0,0.8); border-top: 1px solid var(--border-glass);">
+              <span style="color: var(--primary-cyan); font-family: 'JetBrains Mono', monospace; margin-right: 12px; font-weight: bold; font-size: 16px;">$</span>
+              <input type="text" id="mobile-cmd" autocomplete="off" spellcheck="false" style="flex: 1; background: transparent; border: none; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 14px; outline: none;" placeholder="Tap to execute command...">
+            </form>
+
+          </div>
+        </div>
+        
+        <!-- OTHER PAGES -->
+        <div id="page-brain" class="app-page hidden"><div class="page-header"><h2>🧠 Cognitive Engine</h2></div><div class="page-content"><button class="btn-primary macro-btn" data-cmd="/config vibe_coding true">Enable Vibe Copilot</button></div></div>
+        <div id="page-modules" class="app-page hidden"><div class="page-header"><h2>🧩 Native Host Modules</h2></div><div class="page-content"><button class="btn-primary macro-btn" data-cmd="docker ps">List Active Containers</button></div></div>
+        <div id="page-network" class="app-page hidden"><div class="page-header"><h2>🌐 Network Architecture</h2></div><div class="page-content"><button class="btn-primary macro-btn" data-cmd="ping -c 4 8.8.8.8">Ping External DNS</button></div></div>
+        <div id="page-plugins" class="app-page hidden"><div class="page-header"><h2>🔌 Plugin Ecosystem</h2></div><div class="page-content"><div id="dynamic-plugins-grid"></div></div></div>
+        <div id="page-settings" class="app-page hidden"><div class="page-header"><h2>⚙️ Environment Settings</h2></div><div class="page-content"><button class="btn-primary macro-btn" data-cmd="ls -la">List Files</button></div></div>
+        <div id="page-account" class="app-page hidden"><div class="page-header"><h2>👤 Cryptographic Session</h2></div><div class="page-content"><button id="logoutBtn" class="btn-primary" style="background: #da3633;">Terminate Secure Connection</button></div></div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const canvas = document.getElementById('particle-canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, particles = [];
+    function init() {
+      width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; particles = [];
+      for(let i=0; i<60; i++) particles.push({ x: Math.random() * width, y: Math.random() * height, vx: (Math.random() - 0.5) * 0.5, vy: (Math.random() - 0.5) * 0.5, radius: Math.random() * 2 + 1 });
+    }
+    function animate() {
+      ctx.clearRect(0, 0, width, height);
+      particles.forEach((p, index) => {
+        p.x += p.vx; p.y += p.vy;
+        if(p.x < 0 || p.x > width) p.vx *= -1; if(p.y < 0 || p.y > height) p.vy *= -1;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fillStyle = index % 2 === 0 ? 'rgba(0, 230, 230, 0.6)' : 'rgba(46, 191, 126, 0.6)'; ctx.fill();
+      });
+      requestAnimationFrame(animate);
+    }
+    window.addEventListener('resize', init); init(); animate();
+  </script>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

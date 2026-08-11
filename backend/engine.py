@@ -10,6 +10,7 @@ Proven against the real package: 120 modules discovered, 1948 commands.
 """
 
 from __future__ import annotations
+from backend.shell_engine import run_native_command
 
 import sys
 import time
@@ -178,7 +179,7 @@ class Engine:
                         self._blocked[mod_name]}",
                     "ms": ms}
             return {"ok": False, "command": cmd,
-                    "output": f"unknown command: {cmd}", "ms": ms}
+                    "output": run_native_command(cmd), "ms": ms}
 
         module, handler = entry
         try:

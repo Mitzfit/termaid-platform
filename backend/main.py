@@ -1,3 +1,5 @@
+from __future__ import annotations
+from backend.pty_engine import pty_router
 
 """
 main.py — FastAPI application (policy-aware + streaming).
@@ -20,7 +22,6 @@ REST:
 
 Run: uvicorn backend.main:app --reload --port 8000
 """
-from __future__ import annotations
 
 import datetime as dt
 import time
@@ -231,6 +232,24 @@ async def history(
     return rows
 
 
+
+@app.get("/api/fs")
+async def list_fs(path: str = "."):
+    import os
+    try:
+        base = os.path.abspath(path)
+        items = []
+        if os.path.exists(base) and os.path.isdir(base):
+            parent = os.path.dirname(base)
+            if parent != base:
+                items.append({"name": "..", "is_dir": True, "path": parent})
+            for f in sorted(os.listdir(base)):
+                full = os.path.join(base, f)
+                items.append({"name": f, "is_dir": os.path.isdir(full), "path": full})
+        return {"path": base, "items": items}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "mode": engine.mode,
@@ -327,3 +346,4 @@ _dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 if os.path.isdir(_dist):
     app.mount("/", StaticFiles(directory=_dist, html=True), name="frontend")
 
+app.include_router(pty_router)
